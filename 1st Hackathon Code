@@ -1,0 +1,52 @@
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+# 1. Load the data
+train = pd.read_csv("hacktrain.csv")
+test = pd.read_csv("hacktest.csv")
+
+# 2. Save test IDs for submission
+test_ids = test['ID']
+
+# 3. Handle missing values by mean imputation
+train.fillna(train.mean(numeric_only=True), inplace=True)
+test.fillna(test.mean(numeric_only=True), inplace=True)
+
+# 4. Encode the target variable (class)
+le = LabelEncoder()
+train['class'] = le.fit_transform(train['class'])  # Save for inverse_transform later
+
+# 5. Drop ID column
+X_train = train.drop(columns=['ID', 'class'])
+y_train = train['class']
+X_test = test.drop(columns=['ID'])
+
+# 6.Feature engineering - mean and std NDVI
+X_train['ndvi_mean'] = X_train.mean(axis=1)
+X_train['ndvi_std'] = X_train.std(axis=1)
+X_test['ndvi_mean'] = X_test.mean(axis=1)
+X_test['ndvi_std'] = X_test.std(axis=1)
+
+# 7.Train-validation split for offline testing
+X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, random_state=42)
+
+# 8. Training logistic regression (multiclass)
+model = LogisticRegression(max_iter=1000, multi_class='multinomial', solver='lbfgs')
+model.fit(X_tr, y_tr)
+
+# 9. Evaluating on validation set
+y_val_pred = model.predict(X_val)
+val_acc = accuracy_score(y_val, y_val_pred)
+print("Validation Accuracy:", val_acc)
+
+# 10. Predicting on test data
+y_test_pred = model.predict(X_test)
+final_preds = le.inverse_transform(y_test_pred)
+
+# 11. Prepared and saved the submission
+submission = pd.DataFrame({'ID': test_ids, 'class': final_preds})
+submission.to_csv("submission.csv", index=False)
+print("Submission file saved as 'firsthackthonsubmission.csv'")
